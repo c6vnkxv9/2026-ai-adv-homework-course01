@@ -2,6 +2,13 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const db = require('../database');
 const authMiddleware = require('../middleware/authMiddleware');
+const {
+  generateCheckMacValue,
+  verifyCheckMacValue,
+  formatMerchantTradeDate,
+  generateMerchantTradeNo,
+  getEcpayBaseUrl,
+} = require('../utils/ecpay');
 
 const router = express.Router();
 
@@ -413,6 +420,221 @@ router.patch('/:id/pay', (req, res) => {
     error: null,
     message: action === 'success' ? '付款成功' : '付款失敗'
   });
+});
+
+/**
+ * @openapi
+ * /api/orders/{id}/ecpay/checkout:
+ *   post:
+ *     summary: 產生綠界 AIO 付款表單參數
+ *     description: 回傳前端需自動送出（POST）到綠界付款頁的 action_url 與表單欄位，僅支援信用卡一次付清；只有 pending 訂單可呼叫。
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: 成功
+ *       400:
+ *         description: 訂單狀態不是 pending
+ *       404:
+ *         description: 訂單不存在
+ *       500:
+ *         description: 綠界環境變數未設定
+ */
+router.post('/:id/ecpay/checkout', (req, res) => {
+  const userId = req.user.userId;
+  const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+
+  if (!order) {
+    return res.status(404).json({ data: null, error: 'NOT_FOUND', message: '訂單不存在' });
+  }
+
+  if (order.status !== 'pending') {
+    return res.status(400).json({
+      data: null,
+      error: 'INVALID_STATUS',
+      message: '訂單狀態不是 pending，無法建立付款'
+    });
+  }
+
+  const merchantId = process.env.ECPAY_MERCHANT_ID;
+  const hashKey = process.env.ECPAY_HASH_KEY;
+  const hashIv = process.env.ECPAY_HASH_IV;
+  if (!merchantId || !hashKey || !hashIv) {
+    return res.status(500).json({
+      data: null,
+      error: 'ECPAY_CONFIG_ERROR',
+      message: '綠界金流設定未完成，請確認環境變數'
+    });
+  }
+
+  const items = db.prepare('SELECT product_name, quantity FROM order_items WHERE order_id = ?').all(order.id);
+  const itemName = items.map((item) => `${item.product_name}x${item.quantity}`).join('#').slice(0, 200);
+
+  const merchantTradeNo = generateMerchantTradeNo(order.id);
+  const baseUrl = process.env.BASE_URL || 'http://localhost:3001';
+
+  const params = {
+    MerchantID: merchantId,
+    MerchantTradeNo: merchantTradeNo,
+    MerchantTradeDate: formatMerchantTradeDate(),
+    PaymentType: 'aio',
+    TotalAmount: order.total_amount,
+    TradeDesc: '花卉商品訂單',
+    ItemName: itemName,
+    ReturnURL: `${baseUrl}/api/ecpay/notify`,
+    ChoosePayment: 'Credit',
+    EncryptType: 1,
+    ClientBackURL: `${baseUrl}/orders/${order.id}`,
+    OrderResultURL: `${baseUrl}/orders/${order.id}/ecpay-return`
+  };
+  params.CheckMacValue = generateCheckMacValue(params, hashKey, hashIv);
+
+  db.prepare('UPDATE orders SET ecpay_merchant_trade_no = ? WHERE id = ?').run(merchantTradeNo, order.id);
+
+  res.json({
+    data: {
+      action_url: `${getEcpayBaseUrl()}/Cashier/AioCheckOut/V5`,
+      params
+    },
+    error: null,
+    message: '已產生綠界付款參數，請導向付款頁面'
+  });
+});
+
+/**
+ * @openapi
+ * /api/orders/{id}/ecpay/confirm:
+ *   post:
+ *     summary: 主動查詢綠界交易並確認付款結果
+ *     description: 呼叫綠界 QueryTradeInfo/V5，驗證 CheckMacValue 與金額後才更新訂單狀態；本機環境不依賴 ReturnURL 回呼，此端點是付款結果確認的唯一依據。對已是最終狀態（paid/failed）的訂單直接回傳現況，不重複查詢。
+ *     tags: [Orders]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: 查詢完成（可能是 paid／failed，或仍是 pending 待稍後再查）
+ *       400:
+ *         description: 尚未建立綠界付款交易
+ *       404:
+ *         description: 訂單不存在
+ *       500:
+ *         description: 綠界環境變數未設定
+ *       502:
+ *         description: 呼叫綠界失敗、CheckMacValue 驗證失敗，或回應與訂單不符
+ */
+router.post('/:id/ecpay/confirm', async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+    const order = db.prepare('SELECT * FROM orders WHERE id = ? AND user_id = ?').get(req.params.id, userId);
+
+    if (!order) {
+      return res.status(404).json({ data: null, error: 'NOT_FOUND', message: '訂單不存在' });
+    }
+
+    if (order.status !== 'pending') {
+      const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+      return res.json({ data: { ...order, items }, error: null, message: '訂單已為最終狀態' });
+    }
+
+    if (!order.ecpay_merchant_trade_no) {
+      return res.status(400).json({
+        data: null,
+        error: 'ECPAY_NOT_INITIATED',
+        message: '尚未建立綠界付款交易，請先前往付款'
+      });
+    }
+
+    const merchantId = process.env.ECPAY_MERCHANT_ID;
+    const hashKey = process.env.ECPAY_HASH_KEY;
+    const hashIv = process.env.ECPAY_HASH_IV;
+    if (!merchantId || !hashKey || !hashIv) {
+      return res.status(500).json({
+        data: null,
+        error: 'ECPAY_CONFIG_ERROR',
+        message: '綠界金流設定未完成，請確認環境變數'
+      });
+    }
+
+    const queryParams = {
+      MerchantID: merchantId,
+      MerchantTradeNo: order.ecpay_merchant_trade_no,
+      TimeStamp: Math.floor(Date.now() / 1000)
+    };
+    queryParams.CheckMacValue = generateCheckMacValue(queryParams, hashKey, hashIv);
+
+    let responseParams;
+    try {
+      const ecpayRes = await fetch(`${getEcpayBaseUrl()}/Cashier/QueryTradeInfo/V5`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(queryParams).toString()
+      });
+      const text = await ecpayRes.text();
+      responseParams = Object.fromEntries(new URLSearchParams(text));
+    } catch (err) {
+      return res.status(502).json({
+        data: null,
+        error: 'ECPAY_QUERY_FAILED',
+        message: '查詢綠界交易失敗，請稍後再試'
+      });
+    }
+
+    if (!responseParams.CheckMacValue || !verifyCheckMacValue(responseParams, hashKey, hashIv)) {
+      return res.status(502).json({
+        data: null,
+        error: 'ECPAY_VERIFY_FAILED',
+        message: '無法驗證綠界回應，請稍後再試'
+      });
+    }
+
+    if (
+      responseParams.MerchantTradeNo !== order.ecpay_merchant_trade_no ||
+      Number(responseParams.TradeAmt) !== order.total_amount
+    ) {
+      return res.status(502).json({
+        data: null,
+        error: 'ECPAY_MISMATCH',
+        message: '綠界交易資訊與訂單不符'
+      });
+    }
+
+    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
+
+    if (responseParams.TradeStatus === '1') {
+      db.prepare('UPDATE orders SET status = ?, ecpay_trade_no = ?, payment_method = ? WHERE id = ?')
+        .run('paid', responseParams.TradeNo || null, responseParams.PaymentType || null, order.id);
+      const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+      return res.json({ data: { ...updated, items }, error: null, message: '付款成功' });
+    }
+
+    if (responseParams.TradeStatus === '0') {
+      return res.json({
+        data: { ...order, items },
+        error: null,
+        message: '尚未查到付款結果，請稍後再確認'
+      });
+    }
+
+    db.prepare('UPDATE orders SET status = ?, ecpay_trade_no = ? WHERE id = ?')
+      .run('failed', responseParams.TradeNo || null, order.id);
+    const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(order.id);
+    return res.json({ data: { ...updated, items }, error: null, message: '付款失敗' });
+  } catch (err) {
+    next(err);
+  }
 });
 
 module.exports = router;

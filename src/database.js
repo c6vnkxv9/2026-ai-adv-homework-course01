@@ -52,7 +52,9 @@ function initializeDatabase() {
       recipient_address TEXT NOT NULL,
       total_amount INTEGER NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'failed')),
-
+      ecpay_merchant_trade_no TEXT,
+      ecpay_trade_no TEXT,
+      payment_method TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
@@ -68,9 +70,22 @@ function initializeDatabase() {
     );
   `);
 
+  // Migration guard：相容已存在的舊 DB（無 migration 框架，見 docs/DEVELOPMENT.md）
+  migrateOrdersTable();
+
   // Seed data
   seedAdminUser();
   seedProducts();
+}
+
+function migrateOrdersTable() {
+  const columns = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
+  const newColumns = ['ecpay_merchant_trade_no', 'ecpay_trade_no', 'payment_method'];
+  for (const column of newColumns) {
+    if (!columns.includes(column)) {
+      db.exec(`ALTER TABLE orders ADD COLUMN ${column} TEXT`);
+    }
+  }
 }
 
 function seedAdminUser() {

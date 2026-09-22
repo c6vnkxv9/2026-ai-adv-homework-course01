@@ -1,6 +1,7 @@
 @import "tailwindcss";
 
 @theme {
+  /* 後台沿用色票，維持不變 */
   --color-rose-primary: #C4727F;
   --color-rose-dark: #A85B67;
   --color-rose-light: #E8A5AE;
@@ -12,10 +13,41 @@
   --color-text-primary: #2C2A28;
   --color-text-secondary: #6B6560;
   --color-text-muted: #9A948E;
+
+  /* 前台「花市價籤」色票 */
+  --color-ink: #17241C;
+  --color-paper: #EEE7D8;
+  --color-peony: #9C2B3D;
+  --color-marigold: #DB9A2C;
+  --color-moss: #57795A;
 }
 
 body {
   font-family: 'Noto Sans TC', sans-serif;
   background-color: var(--color-cream);
   color: var(--color-text-primary);
+}
+
+.material-symbols-outlined {
+  font-variation-settings: 'FILL' 0, 'wght' 350, 'GRAD' 0, 'opsz' 20;
+  font-size: 1.1em;
+  line-height: 1;
+  vertical-align: -0.15em;
+}
+
+/* 前台價籤卡片：左上角切角，取代圓角卡片＋陰影 */
+@layer components {
+  .tag-corner {
+    clip-path: polygon(14px 0%, 100% 0%, 100% 100%, 0% 100%, 0% 14px);
+  }
+  .tag-hole {
+    position: absolute;
+    top: 7px;
+    left: 7px;
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    border: 1px solid rgb(23 36 28 / 0.35);
+    background: var(--color-paper);
+  }
 }

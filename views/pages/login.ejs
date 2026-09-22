@@ -1,23 +1,31 @@
-<div id="app">
+<div id="app" class="max-w-7xl mx-auto px-4 sm:px-6 py-10">
   <div class="min-h-[60vh] flex items-center justify-center">
-    <div class="bg-white rounded-2xl shadow-sm w-full max-w-md p-8">
-      <h1 class="text-2xl font-bold text-rose-primary text-center mb-6" style="font-family: 'Noto Serif TC', serif;">
+    <div class="w-full max-w-md border border-ink/20 p-6 sm:p-8">
+      <!-- Batch stamp header -->
+      <div class="flex items-center justify-between pb-4 mb-6 border-b border-dashed border-ink/20 text-[11px] text-ink/60">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="inline-block w-2 h-2 border border-ink/40 rotate-45"></span>
+          花漾生活會員系統
+        </span>
+      </div>
+
+      <h1 class="text-2xl font-bold text-ink text-center mb-6" style="font-family: 'Noto Serif TC', serif;">
         花漾生活
       </h1>
 
       <!-- Tabs -->
-      <div class="flex mb-6 border border-gray-200 rounded-full overflow-hidden">
+      <div class="grid grid-cols-2 border-b border-ink/15 mb-6 text-sm">
         <button
           @click="activeTab = 'login'; errors = {}"
-          class="flex-1 py-2 text-sm font-medium transition-colors"
-          :class="activeTab === 'login' ? 'bg-rose-primary text-white' : 'text-text-secondary hover:bg-gray-50'"
+          class="pb-3 text-center font-medium transition-all border-b-2"
+          :class="activeTab === 'login' ? 'text-ink border-peony' : 'text-ink/50 border-transparent hover:text-ink'"
         >
           登入
         </button>
         <button
           @click="activeTab = 'register'; errors = {}"
-          class="flex-1 py-2 text-sm font-medium transition-colors"
-          :class="activeTab === 'register' ? 'bg-rose-primary text-white' : 'text-text-secondary hover:bg-gray-50'"
+          class="pb-3 text-center font-medium transition-all border-b-2"
+          :class="activeTab === 'register' ? 'text-ink border-peony' : 'text-ink/50 border-transparent hover:text-ink'"
         >
           註冊
         </button>
@@ -26,33 +34,33 @@
       <!-- Login Form -->
       <form v-if="activeTab === 'login'" @submit.prevent="handleLogin" class="space-y-4">
         <div>
-          <label class="block text-sm text-text-secondary mb-1">Email</label>
+          <label class="block text-sm text-ink/70 mb-1">Email</label>
           <input
             v-model="loginForm.email"
             type="email"
             placeholder="請輸入 Email"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-rose-primary"
-            :class="{ 'border-red-400': errors.email }"
+            class="w-full border border-ink/20 px-3 py-2.5 text-sm focus:outline-none focus:border-ink bg-paper"
+            :class="{ 'border-peony': errors.email }"
           />
-          <p v-if="errors.email" class="text-red-500 text-xs mt-1">{{ errors.email }}</p>
+          <p v-if="errors.email" class="text-peony text-xs mt-1">{{ errors.email }}</p>
         </div>
 
         <div>
-          <label class="block text-sm text-text-secondary mb-1">密碼</label>
+          <label class="block text-sm text-ink/70 mb-1">密碼</label>
           <input
             v-model="loginForm.password"
             type="password"
             placeholder="請輸入密碼"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-rose-primary"
-            :class="{ 'border-red-400': errors.password }"
+            class="w-full border border-ink/20 px-3 py-2.5 text-sm focus:outline-none focus:border-ink bg-paper"
+            :class="{ 'border-peony': errors.password }"
           />
-          <p v-if="errors.password" class="text-red-500 text-xs mt-1">{{ errors.password }}</p>
+          <p v-if="errors.password" class="text-peony text-xs mt-1">{{ errors.password }}</p>
         </div>
 
         <button
           type="submit"
           :disabled="submitting"
-          class="w-full bg-rose-primary text-white py-3 rounded-full text-sm font-medium hover:bg-rose-dark transition-colors disabled:opacity-50"
+          class="w-full bg-peony text-paper py-3 text-sm font-medium hover:bg-peony/90 transition-colors disabled:opacity-50"
         >
           {{ submitting ? '登入中...' : '登入' }}
         </button>
@@ -61,45 +69,45 @@
       <!-- Register Form -->
       <form v-else @submit.prevent="handleRegister" class="space-y-4">
         <div>
-          <label class="block text-sm text-text-secondary mb-1">姓名</label>
+          <label class="block text-sm text-ink/70 mb-1">姓名</label>
           <input
             v-model="registerForm.name"
             type="text"
             placeholder="請輸入姓名"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-rose-primary"
-            :class="{ 'border-red-400': errors.name }"
+            class="w-full border border-ink/20 px-3 py-2.5 text-sm focus:outline-none focus:border-ink bg-paper"
+            :class="{ 'border-peony': errors.name }"
           />
-          <p v-if="errors.name" class="text-red-500 text-xs mt-1">{{ errors.name }}</p>
+          <p v-if="errors.name" class="text-peony text-xs mt-1">{{ errors.name }}</p>
         </div>
 
         <div>
-          <label class="block text-sm text-text-secondary mb-1">Email</label>
+          <label class="block text-sm text-ink/70 mb-1">Email</label>
           <input
             v-model="registerForm.email"
             type="email"
             placeholder="請輸入 Email"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-rose-primary"
-            :class="{ 'border-red-400': errors.email }"
+            class="w-full border border-ink/20 px-3 py-2.5 text-sm focus:outline-none focus:border-ink bg-paper"
+            :class="{ 'border-peony': errors.email }"
           />
-          <p v-if="errors.email" class="text-red-500 text-xs mt-1">{{ errors.email }}</p>
+          <p v-if="errors.email" class="text-peony text-xs mt-1">{{ errors.email }}</p>
         </div>
 
         <div>
-          <label class="block text-sm text-text-secondary mb-1">密碼</label>
+          <label class="block text-sm text-ink/70 mb-1">密碼</label>
           <input
             v-model="registerForm.password"
             type="password"
             placeholder="至少 6 個字元"
-            class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-rose-primary"
-            :class="{ 'border-red-400': errors.password }"
+            class="w-full border border-ink/20 px-3 py-2.5 text-sm focus:outline-none focus:border-ink bg-paper"
+            :class="{ 'border-peony': errors.password }"
           />
-          <p v-if="errors.password" class="text-red-500 text-xs mt-1">{{ errors.password }}</p>
+          <p v-if="errors.password" class="text-peony text-xs mt-1">{{ errors.password }}</p>
         </div>
 
         <button
           type="submit"
           :disabled="submitting"
-          class="w-full bg-rose-primary text-white py-3 rounded-full text-sm font-medium hover:bg-rose-dark transition-colors disabled:opacity-50"
+          class="w-full bg-peony text-paper py-3 text-sm font-medium hover:bg-peony/90 transition-colors disabled:opacity-50"
         >
           {{ submitting ? '註冊中...' : '註冊' }}
         </button>

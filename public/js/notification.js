@@ -12,7 +12,7 @@ const Notification = {
       info: 'bg-gray-700 text-white'
     };
 
-    el.className = 'fixed top-20 right-4 z-[100] px-5 py-3 rounded-xl shadow-lg text-sm transition-all duration-300 ' + (colors[type] || colors.info);
+    el.className = 'fixed top-20 right-4 z-[100] px-5 py-3 border border-white/20 text-sm transition-all duration-300 ' + (colors[type] || colors.info);
     el.textContent = message;
     el.style.display = 'block';
     el.style.opacity = '1';

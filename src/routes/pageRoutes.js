@@ -55,6 +55,12 @@ router.get('/orders/:id', function (req, res) {
   });
 });
 
+// 綠界 AIO OrderResultURL 落地頁：消費者瀏覽器導回（非 ECPay 伺服器呼叫），
+// 不信任其 POST body，只當作「該去查詢付款結果」的觸發訊號。
+router.post('/orders/:id/ecpay-return', function (req, res) {
+  res.redirect(303, '/orders/' + req.params.id + '?payment=return');
+});
+
 // Admin pages
 router.get('/admin/products', function (req, res) {
   renderAdmin(res, 'products', {

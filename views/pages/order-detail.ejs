@@ -1,30 +1,30 @@
-<div id="app" data-order-id="<%= orderId %>" data-payment-result="<%= paymentResult %>">
-  <h1 class="text-2xl font-bold text-text-primary mb-6" style="font-family: 'Noto Serif TC', serif;">訂單詳情</h1>
+<div id="app" data-order-id="<%= orderId %>" data-payment-result="<%= paymentResult %>" class="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+  <h1 class="text-2xl font-bold text-ink mb-6" style="font-family: 'Noto Serif TC', serif;">訂單詳情</h1>
 
-  <div v-if="loading" class="flex justify-center py-12">
-    <div class="w-8 h-8 border-4 border-rose-primary border-t-transparent rounded-full animate-spin"></div>
+  <div v-if="loading" class="flex justify-center py-16">
+    <div class="w-8 h-8 border-2 border-ink/20 border-t-peony rounded-full animate-spin"></div>
   </div>
 
   <template v-else-if="order">
     <!-- Payment Result Alert -->
     <div
       v-if="paymentResult && paymentMessages[paymentResult]"
-      class="rounded-xl p-4 mb-6 text-sm"
+      class="p-4 mb-6 text-sm"
       :class="paymentMessages[paymentResult].cls"
     >
       {{ paymentMessages[paymentResult].text }}
     </div>
 
     <!-- Order Info -->
-    <div class="bg-white rounded-2xl shadow-sm p-6 mb-6">
+    <div class="border border-ink/15 p-6 mb-6">
       <div class="flex items-start justify-between">
         <div>
-          <p class="text-sm text-text-secondary">訂單編號：{{ order.order_no }}</p>
-          <p class="text-xs text-text-muted mt-1">建立日期：{{ new Date(order.created_at).toLocaleDateString('zh-TW') }}</p>
+          <p class="text-sm text-ink/70">訂單編號：{{ order.order_no }}</p>
+          <p class="text-xs text-ink/50 mt-1">建立日期：{{ new Date(order.created_at).toLocaleDateString('zh-TW') }}</p>
         </div>
         <span
           class="text-xs px-3 py-1 rounded-full font-medium"
-          :class="statusMap[order.status]?.cls || 'bg-gray-100 text-gray-600'"
+          :class="statusMap[order.status]?.cls || 'border border-ink/30 text-ink/60'"
         >
           {{ statusMap[order.status]?.label || order.status }}
         </span>
@@ -32,9 +32,9 @@
     </div>
 
     <!-- Recipient Info -->
-    <div class="bg-white rounded-2xl shadow-sm p-6 mb-6">
-      <h2 class="font-medium text-text-primary mb-3">收件資訊</h2>
-      <div class="text-sm space-y-2 text-text-secondary">
+    <div class="border border-ink/15 p-6 mb-6">
+      <h2 class="font-medium text-ink mb-3">收件資訊</h2>
+      <div class="text-sm space-y-2 text-ink/70">
         <p>收件人：{{ order.recipient_name }}</p>
         <p>Email：{{ order.recipient_email }}</p>
         <p>地址：{{ order.recipient_address }}</p>
@@ -42,11 +42,11 @@
     </div>
 
     <!-- Order Items -->
-    <div class="bg-white rounded-2xl shadow-sm p-6 mb-6">
-      <h2 class="font-medium text-text-primary mb-3">商品明細</h2>
+    <div class="border border-ink/15 p-6 mb-6">
+      <h2 class="font-medium text-ink mb-3">商品明細</h2>
       <table class="w-full text-sm">
         <thead>
-          <tr class="border-b border-gray-100 text-text-muted">
+          <tr class="border-b border-ink/10 text-ink/50">
             <th class="text-left py-2 font-normal">商品名稱</th>
             <th class="text-right py-2 font-normal">單價</th>
             <th class="text-right py-2 font-normal">數量</th>
@@ -54,37 +54,37 @@
           </tr>
         </thead>
         <tbody>
-          <tr v-for="item in order.items" :key="item.id" class="border-b border-gray-50">
-            <td class="py-3 text-text-primary">{{ item.product_name }}</td>
-            <td class="py-3 text-right text-text-secondary">NT$ {{ item.product_price.toLocaleString() }}</td>
-            <td class="py-3 text-right text-text-secondary">{{ item.quantity }}</td>
-            <td class="py-3 text-right text-text-primary font-medium">NT$ {{ (item.product_price * item.quantity).toLocaleString() }}</td>
+          <tr v-for="item in order.items" :key="item.id" class="border-b border-ink/5">
+            <td class="py-3 text-ink">{{ item.product_name }}</td>
+            <td class="py-3 text-right text-ink/70">NT$ {{ item.product_price.toLocaleString() }}</td>
+            <td class="py-3 text-right text-ink/70">{{ item.quantity }}</td>
+            <td class="py-3 text-right text-ink font-medium">NT$ {{ (item.product_price * item.quantity).toLocaleString() }}</td>
           </tr>
         </tbody>
         <tfoot>
           <tr>
-            <td colspan="3" class="pt-3 text-right font-bold text-text-primary">總計</td>
-            <td class="pt-3 text-right font-bold text-rose-primary text-lg">NT$ {{ order.total_amount.toLocaleString() }}</td>
+            <td colspan="3" class="pt-3 text-right font-bold text-ink">總計</td>
+            <td class="pt-3 text-right font-bold text-peony text-lg">NT$ {{ order.total_amount.toLocaleString() }}</td>
           </tr>
         </tfoot>
       </table>
     </div>
 
-    <!-- Payment Buttons -->
+    <!-- Payment Actions -->
     <div v-if="order.status === 'pending'" class="flex gap-4">
       <button
-        @click="handlePaySuccess"
-        :disabled="paying"
-        class="bg-sage text-white px-8 py-3 rounded-full text-sm font-medium hover:bg-sage/90 transition-colors disabled:opacity-50"
+        @click="goToEcpayCheckout"
+        :disabled="payingRedirect || confirming"
+        class="bg-peony text-paper px-8 py-3 text-sm font-medium hover:bg-peony/90 transition-colors disabled:opacity-50"
       >
-        {{ paying ? '處理中...' : '付款成功' }}
+        {{ payingRedirect ? '導向綠界付款中...' : '前往付款' }}
       </button>
       <button
-        @click="handlePayFail"
-        :disabled="paying"
-        class="bg-red-500 text-white px-8 py-3 rounded-full text-sm font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+        @click="confirmEcpayPayment()"
+        :disabled="confirming || payingRedirect"
+        class="border border-ink/30 text-ink px-8 py-3 text-sm font-medium hover:border-ink transition-colors disabled:opacity-50"
       >
-        {{ paying ? '處理中...' : '付款失敗' }}
+        {{ confirming ? '查詢中...' : '確認付款結果' }}
       </button>
     </div>
   </template>
