@@ -4,4 +4,8 @@
 
 命名仍維持：`YYYY-MM-DD-<feature-name>.md`。
 
-目前尚無歸檔項目。
+## 已歸檔項目
+
+| 檔案 | 功能 | 結論回寫至 |
+|---|---|---|
+| [`2026-09-22-ecpay-integration.md`](./2026-09-22-ecpay-integration.md) | 綠界 ECPay AIO 金流串接（本機開發限定版） | `ARCHITECTURE.md`「金流／第三方整合」、`FEATURES.md` 第 4／8 節、`DEVELOPMENT.md` 環境變數表、`TESTING.md` 測試檔案表、`CHANGELOG.md` |

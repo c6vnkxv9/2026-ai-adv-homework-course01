@@ -106,6 +106,7 @@ app.js（組裝，不 listen）
 │   ├── products.test.js
 │   ├── cart.test.js
 │   ├── orders.test.js
+│   ├── ecpayPayment.test.js    # 綠界 AIO checkout/confirm，mock global.fetch
 │   ├── adminProducts.test.js
 │   └── adminOrders.test.js
 │
