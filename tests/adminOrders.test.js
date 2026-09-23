@@ -1,21 +1,25 @@
-const { app, request, getAdminToken, registerUser } = require('./setup');
+const { app, request, getAdminToken, registerUser, resetDatabase } = require('./setup');
 
 describe('Admin Orders API', () => {
   let adminToken;
   let orderId;
 
   beforeAll(async () => {
+    resetDatabase();
     adminToken = await getAdminToken();
 
     // Create an order: register user -> add to cart -> place order
     const { token } = await registerUser();
-    const prodRes = await request(app).get('/api/products');
-    const productId = prodRes.body.data.products[0].id;
+    const prodRes = await request(app).get('/api/products?limit=100');
+    const product = prodRes.body.data.products.find((p) => p.stock > 0);
+    if (!product) {
+      throw new Error('沒有可用庫存的商品，無法執行後台訂單測試');
+    }
 
     await request(app)
       .post('/api/cart')
       .set('Authorization', `Bearer ${token}`)
-      .send({ productId, quantity: 1 });
+      .send({ productId: product.id, quantity: 1 });
 
     const orderRes = await request(app)
       .post('/api/orders')
@@ -24,7 +28,12 @@ describe('Admin Orders API', () => {
         recipientName: '管理員測試收件人',
         recipientEmail: 'admin-test@example.com',
         recipientAddress: '台北市管理員測試路 456 號',
+        shippingMethod: 'home',
       });
+
+    if (orderRes.status !== 201) {
+      throw new Error(`建單失敗：${orderRes.status} ${JSON.stringify(orderRes.body)}`);
+    }
 
     orderId = orderRes.body.data.id;
   });

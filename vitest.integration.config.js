@@ -1,15 +1,22 @@
 import { defineConfig } from 'vitest/config';
 
-/** 預設 npm test：unit + 透過 CLI 分開跑；此設定僅作相容入口（執行全部可測檔）。 */
 export default defineConfig({
   test: {
     globals: true,
     fileParallelism: false,
     setupFiles: ['./tests/vitest.env.js'],
-    include: ['tests/**/*.test.js'],
+    include: [
+      'tests/integration/**/*.test.js',
+      'tests/auth.test.js',
+      'tests/products.test.js',
+      'tests/cart.test.js',
+      'tests/orders.test.js',
+      'tests/ecpayPayment.test.js',
+      'tests/adminProducts.test.js',
+      'tests/adminOrders.test.js',
+    ],
     sequence: {
       files: [
-        'tests/shipping.test.js',
         'tests/integration/orderFlow.test.js',
         'tests/auth.test.js',
         'tests/products.test.js',

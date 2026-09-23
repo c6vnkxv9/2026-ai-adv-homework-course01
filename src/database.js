@@ -3,11 +3,13 @@ const path = require('path');
 const bcrypt = require('bcrypt');
 const { v4: uuidv4 } = require('uuid');
 
-const dbPath = path.join(__dirname, '..', 'database.sqlite');
+const dbPath = process.env.DATABASE_PATH || path.join(__dirname, '..', 'database.sqlite');
 const db = new Database(dbPath);
 
-// Enable WAL mode for better performance
-db.pragma('journal_mode = WAL');
+// Enable WAL mode for better performance（:memory: 不支援 WAL）
+if (dbPath !== ':memory:') {
+  db.pragma('journal_mode = WAL');
+}
 db.pragma('foreign_keys = ON');
 
 function initializeDatabase() {
@@ -51,6 +53,10 @@ function initializeDatabase() {
       recipient_email TEXT NOT NULL,
       recipient_address TEXT NOT NULL,
       total_amount INTEGER NOT NULL,
+      shipping_method TEXT NOT NULL DEFAULT 'home',
+      shipping_fee INTEGER NOT NULL DEFAULT 0,
+      is_remote_area INTEGER NOT NULL DEFAULT 0,
+      is_express INTEGER NOT NULL DEFAULT 0,
       status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'paid', 'failed')),
       ecpay_merchant_trade_no TEXT,
       ecpay_trade_no TEXT,
@@ -80,10 +86,18 @@ function initializeDatabase() {
 
 function migrateOrdersTable() {
   const columns = db.prepare('PRAGMA table_info(orders)').all().map((c) => c.name);
-  const newColumns = ['ecpay_merchant_trade_no', 'ecpay_trade_no', 'payment_method'];
-  for (const column of newColumns) {
-    if (!columns.includes(column)) {
-      db.exec(`ALTER TABLE orders ADD COLUMN ${column} TEXT`);
+  const additions = [
+    { name: 'ecpay_merchant_trade_no', ddl: 'TEXT' },
+    { name: 'ecpay_trade_no', ddl: 'TEXT' },
+    { name: 'payment_method', ddl: 'TEXT' },
+    { name: 'shipping_method', ddl: "TEXT NOT NULL DEFAULT 'home'" },
+    { name: 'shipping_fee', ddl: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'is_remote_area', ddl: 'INTEGER NOT NULL DEFAULT 0' },
+    { name: 'is_express', ddl: 'INTEGER NOT NULL DEFAULT 0' },
+  ];
+  for (const column of additions) {
+    if (!columns.includes(column.name)) {
+      db.exec(`ALTER TABLE orders ADD COLUMN ${column.name} ${column.ddl}`);
     }
   }
 }
@@ -178,6 +192,27 @@ function seedProducts() {
   insertMany(seedProducts);
 }
 
+/**
+ * 僅供測試：清空業務資料後重新 seed，不刪除 schema。
+ * 正式環境呼叫會拋錯，避免誤清 production DB。
+ */
+function resetDatabaseForTests() {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error('resetDatabaseForTests 僅可在 NODE_ENV=test 時使用');
+  }
+  db.exec(`
+    DELETE FROM order_items;
+    DELETE FROM orders;
+    DELETE FROM cart_items;
+    DELETE FROM products;
+    DELETE FROM users;
+  `);
+  seedAdminUser();
+  seedProducts();
+}
+
 initializeDatabase();
+
+db.resetDatabaseForTests = resetDatabaseForTests;
 
 module.exports = db;

@@ -1,17 +1,20 @@
-const { app, request, registerUser } = require('./setup');
+const { app, request, registerUser, resetDatabase } = require('./setup');
 const { generateCheckMacValue } = require('../src/utils/ecpay');
 
 const HASH_KEY = process.env.ECPAY_HASH_KEY;
 const HASH_IV = process.env.ECPAY_HASH_IV;
 
 async function createPendingOrder(token) {
-  const prodRes = await request(app).get('/api/products');
-  const productId = prodRes.body.data.products[0].id;
+  const prodRes = await request(app).get('/api/products?limit=100');
+  const product = prodRes.body.data.products.find((p) => p.stock > 0);
+  if (!product) {
+    throw new Error('沒有可用庫存的商品，無法建立測試訂單');
+  }
 
   await request(app)
     .post('/api/cart')
     .set('Authorization', `Bearer ${token}`)
-    .send({ productId, quantity: 1 });
+    .send({ productId: product.id, quantity: 1 });
 
   const orderRes = await request(app)
     .post('/api/orders')
@@ -20,7 +23,12 @@ async function createPendingOrder(token) {
       recipientName: '測試收件人',
       recipientEmail: 'recipient@example.com',
       recipientAddress: '台北市測試路 123 號',
+      shippingMethod: 'home',
     });
+
+  if (orderRes.status !== 201) {
+    throw new Error(`建單失敗：${orderRes.status} ${JSON.stringify(orderRes.body)}`);
+  }
 
   return orderRes.body.data;
 }
@@ -53,6 +61,7 @@ describe('ECPay Payment API', () => {
   let userToken;
 
   beforeAll(async () => {
+    resetDatabase();
     const { token } = await registerUser();
     userToken = token;
   });
@@ -71,7 +80,7 @@ describe('ECPay Payment API', () => {
     expect(res.body.data.params).toHaveProperty('MerchantTradeNo');
     expect(res.body.data.params).toHaveProperty('CheckMacValue');
     expect(res.body.data.params.TotalAmount).toBe(order.total_amount);
-    expect(res.body.data.params.ChoosePayment).toBe('Credit');
+    expect(res.body.data.params.ChoosePayment).toBe('ALL');
   });
 
   it('should fail to checkout without auth', async () => {

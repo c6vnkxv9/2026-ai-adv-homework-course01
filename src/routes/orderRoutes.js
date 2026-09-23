@@ -9,6 +9,10 @@ const {
   generateMerchantTradeNo,
   getEcpayBaseUrl,
 } = require('../utils/ecpay');
+const {
+  calculateShippingFee,
+  isValidShippingMethod,
+} = require('../utils/shipping');
 
 const router = express.Router();
 
@@ -35,7 +39,7 @@ function generateOrderNo() {
  *         application/json:
  *           schema:
  *             type: object
- *             required: [recipientName, recipientEmail, recipientAddress]
+ *             required: [recipientName, recipientEmail, recipientAddress, shippingMethod]
  *             properties:
  *               recipientName:
  *                 type: string
@@ -44,6 +48,16 @@ function generateOrderNo() {
  *                 format: email
  *               recipientAddress:
  *                 type: string
+ *               shippingMethod:
+ *                 type: string
+ *                 enum: [home, convenience]
+ *                 description: 配送方式（home=宅配、convenience=超商取貨）
+ *               isRemoteArea:
+ *                 type: boolean
+ *                 description: 是否偏遠地區（加收 200）
+ *               isExpress:
+ *                 type: boolean
+ *                 description: 是否當日急件（加收 250）
  *     responses:
  *       201:
  *         description: 訂單建立成功
@@ -61,6 +75,14 @@ function generateOrderNo() {
  *                       type: string
  *                     total_amount:
  *                       type: integer
+ *                     shipping_fee:
+ *                       type: integer
+ *                     shipping_method:
+ *                       type: string
+ *                     is_remote_area:
+ *                       type: boolean
+ *                     is_express:
+ *                       type: boolean
  *                     status:
  *                       type: string
  *                     items:
@@ -82,10 +104,17 @@ function generateOrderNo() {
  *                 message:
  *                   type: string
  *       400:
- *         description: 購物車為空或庫存不足或收件資訊缺失
+ *         description: 購物車為空或庫存不足或收件／配送資訊缺失
  */
 router.post('/', (req, res) => {
-  const { recipientName, recipientEmail, recipientAddress } = req.body;
+  const {
+    recipientName,
+    recipientEmail,
+    recipientAddress,
+    shippingMethod,
+    isRemoteArea = false,
+    isExpress = false,
+  } = req.body;
   const userId = req.user.userId;
 
   if (!recipientName || !recipientEmail || !recipientAddress) {
@@ -93,6 +122,14 @@ router.post('/', (req, res) => {
       data: null,
       error: 'VALIDATION_ERROR',
       message: '收件人姓名、Email 和地址為必填欄位'
+    });
+  }
+
+  if (!isValidShippingMethod(shippingMethod)) {
+    return res.status(400).json({
+      data: null,
+      error: 'VALIDATION_ERROR',
+      message: '配送方式須為 home（宅配）或 convenience（超商取貨）'
     });
   }
 
@@ -133,10 +170,18 @@ router.post('/', (req, res) => {
     });
   }
 
-  // Calculate total
-  const totalAmount = cartItems.reduce(
+  const subtotal = cartItems.reduce(
     (sum, item) => sum + item.product_price * item.quantity, 0
   );
+  const remoteFlag = Boolean(isRemoteArea);
+  const expressFlag = Boolean(isExpress);
+  const shippingFee = calculateShippingFee({
+    subtotal,
+    shippingMethod,
+    isRemoteArea: remoteFlag,
+    isExpress: expressFlag,
+  });
+  const totalAmount = subtotal + shippingFee;
 
   const orderId = uuidv4();
   const orderNo = generateOrderNo();
@@ -144,9 +189,23 @@ router.post('/', (req, res) => {
   // Transaction: create order, order items, deduct stock, clear cart
   const createOrder = db.transaction(() => {
     db.prepare(
-      `INSERT INTO orders (id, order_no, user_id, recipient_name, recipient_email, recipient_address, total_amount)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(orderId, orderNo, userId, recipientName, recipientEmail, recipientAddress, totalAmount);
+      `INSERT INTO orders (
+         id, order_no, user_id, recipient_name, recipient_email, recipient_address,
+         total_amount, shipping_method, shipping_fee, is_remote_area, is_express
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      orderId,
+      orderNo,
+      userId,
+      recipientName,
+      recipientEmail,
+      recipientAddress,
+      totalAmount,
+      shippingMethod,
+      shippingFee,
+      remoteFlag ? 1 : 0,
+      expressFlag ? 1 : 0
+    );
 
     const insertItem = db.prepare(
       `INSERT INTO order_items (id, order_id, product_id, product_name, product_price, quantity)
@@ -175,6 +234,10 @@ router.post('/', (req, res) => {
       id: order.id,
       order_no: order.order_no,
       total_amount: order.total_amount,
+      shipping_fee: order.shipping_fee,
+      shipping_method: order.shipping_method,
+      is_remote_area: Boolean(order.is_remote_area),
+      is_express: Boolean(order.is_express),
       status: order.status,
       items: orderItems,
       created_at: order.created_at
@@ -427,7 +490,7 @@ router.patch('/:id/pay', (req, res) => {
  * /api/orders/{id}/ecpay/checkout:
  *   post:
  *     summary: 產生綠界 AIO 付款表單參數
- *     description: 回傳前端需自動送出（POST）到綠界付款頁的 action_url 與表單欄位，僅支援信用卡一次付清；只有 pending 訂單可呼叫。
+ *     description: 回傳前端需自動送出（POST）到綠界付款頁的 action_url 與表單欄位；ChoosePayment=ALL（可選信用卡／網路 ATM 等）；只有 pending 訂單可呼叫。
  *     tags: [Orders]
  *     security:
  *       - bearerAuth: []
@@ -489,7 +552,7 @@ router.post('/:id/ecpay/checkout', (req, res) => {
     TradeDesc: '花卉商品訂單',
     ItemName: itemName,
     ReturnURL: `${baseUrl}/api/ecpay/notify`,
-    ChoosePayment: 'Credit',
+    ChoosePayment: 'ALL',
     EncryptType: 1,
     ClientBackURL: `${baseUrl}/orders/${order.id}`,
     OrderResultURL: `${baseUrl}/orders/${order.id}/ecpay-return`

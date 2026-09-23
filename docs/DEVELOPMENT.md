@@ -72,6 +72,7 @@
 | `ECPAY_MERCHANT_ID` | ECPay 商店代號 | AIO checkout/confirm 必填，缺則 500 `ECPAY_CONFIG_ERROR` | example 有值（公開測試帳號） |
 | `ECPAY_HASH_KEY` | ECPay HashKey（CheckMacValue） | 同上必填 | example 有值 |
 | `ECPAY_HASH_IV` | ECPay HashIV（CheckMacValue） | 同上必填 | example 有值 |
+| `DATABASE_PATH` | SQLite 檔路徑；測試可設為 `database.test.sqlite` 或 `:memory:`，**勿**指向正式 `database.sqlite` | 選填 | 專案根目錄 `database.sqlite` |
 | `ECPAY_ENV` | 值為 `'production'` 才走正式環境，其他值（含 `staging`）一律走 `payment-stage.ecpay.com.tw` | 選填 | `staging` |
 
 複製 `.env.example` 為 `.env` 後至少設定 `JWT_SECRET` 再 `npm run dev:server`。

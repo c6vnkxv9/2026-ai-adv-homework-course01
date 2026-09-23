@@ -1179,7 +1179,8 @@
                 "required": [
                   "recipientName",
                   "recipientEmail",
-                  "recipientAddress"
+                  "recipientAddress",
+                  "shippingMethod"
                 ],
                 "properties": {
                   "recipientName": {
@@ -1191,6 +1192,22 @@
                   },
                   "recipientAddress": {
                     "type": "string"
+                  },
+                  "shippingMethod": {
+                    "type": "string",
+                    "enum": [
+                      "home",
+                      "convenience"
+                    ],
+                    "description": "配送方式（home=宅配、convenience=超商取貨）"
+                  },
+                  "isRemoteArea": {
+                    "type": "boolean",
+                    "description": "是否偏遠地區（加收 200）"
+                  },
+                  "isExpress": {
+                    "type": "boolean",
+                    "description": "是否當日急件（加收 250）"
                   }
                 }
               }
@@ -1216,6 +1233,18 @@
                         },
                         "total_amount": {
                           "type": "integer"
+                        },
+                        "shipping_fee": {
+                          "type": "integer"
+                        },
+                        "shipping_method": {
+                          "type": "string"
+                        },
+                        "is_remote_area": {
+                          "type": "boolean"
+                        },
+                        "is_express": {
+                          "type": "boolean"
                         },
                         "status": {
                           "type": "string"
@@ -1255,7 +1284,7 @@
             }
           },
           "400": {
-            "description": "購物車為空或庫存不足或收件資訊缺失"
+            "description": "購物車為空或庫存不足或收件／配送資訊缺失"
           }
         }
       },
@@ -1531,7 +1560,7 @@
     "/api/orders/{id}/ecpay/checkout": {
       "post": {
         "summary": "產生綠界 AIO 付款表單參數",
-        "description": "回傳前端需自動送出（POST）到綠界付款頁的 action_url 與表單欄位，僅支援信用卡一次付清；只有 pending 訂單可呼叫。",
+        "description": "回傳前端需自動送出（POST）到綠界付款頁的 action_url 與表單欄位；ChoosePayment=ALL（可選信用卡／網路 ATM 等）；只有 pending 訂單可呼叫。",
         "tags": [
           "Orders"
         ],

@@ -1,4 +1,4 @@
-<div id="app" class="max-w-4xl mx-auto px-4 sm:px-6 py-10">
+<div id="app" class="max-w-6xl mx-auto px-4 sm:px-6 py-10">
   <h1 class="text-2xl font-bold text-ink mb-6" style="font-family: 'Noto Serif TC', serif;">購物車</h1>
 
   <div v-if="loading" class="flex justify-center py-16">
@@ -21,80 +21,82 @@
       已達免運門檻
     </div>
 
-    <!-- Cart Items -->
-    <div class="border border-ink/15 mb-6">
-      <div
-        v-for="item in items"
-        :key="item.id"
-        class="flex items-center gap-4 p-4 border-b border-ink/10 last:border-0"
-      >
-        <img
-          :src="item.product.image_url || 'https://images.unsplash.com/photo-1490750967868-88aa4f44baee?w=100'"
-          :alt="item.product.name"
-          class="w-16 h-16 object-cover flex-shrink-0 border border-ink/10"
-        />
-        <div class="flex-1 min-w-0">
-          <h3 class="font-medium text-ink text-sm truncate">{{ item.product.name }}</h3>
-          <p class="text-peony text-sm">NT$ {{ item.product.price.toLocaleString() }}</p>
-        </div>
-
-        <!-- Quantity Controls -->
-        <div class="flex items-center border border-ink/20">
-          <button
-            @click="updateQuantity(item.id, item.quantity - 1)"
-            :disabled="item.quantity <= 1"
-            class="w-8 h-8 flex items-center justify-center hover:bg-ink hover:text-paper text-ink text-sm disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink"
-          >
-            −
-          </button>
-          <span class="w-8 h-8 flex items-center justify-center text-sm border-x border-ink/20">
-            {{ item.quantity }}
-          </span>
-          <button
-            @click="updateQuantity(item.id, item.quantity + 1)"
-            :disabled="item.quantity >= item.product.stock"
-            class="w-8 h-8 flex items-center justify-center hover:bg-ink hover:text-paper text-ink text-sm disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink"
-          >
-            +
-          </button>
-        </div>
-
-        <p class="text-ink font-medium text-sm w-24 text-right">
-          NT$ {{ (item.product.price * item.quantity).toLocaleString() }}
-        </p>
-
-        <button
-          @click="confirmDelete(item.id)"
-          class="text-ink/40 hover:text-peony transition-colors ml-2"
-          aria-label="移除"
+    <div class="flex flex-col lg:flex-row lg:items-start gap-6">
+      <!-- Cart Items -->
+      <div class="border border-ink/15 lg:flex-1 lg:min-w-0">
+        <div
+          v-for="item in items"
+          :key="item.id"
+          class="flex items-center gap-4 p-4 border-b border-ink/10 last:border-0"
         >
-          <span class="material-symbols-outlined" data-icon="delete">delete</span>
+          <img
+            :src="item.product.image_url || 'https://images.unsplash.com/photo-1490750967868-88aa4f44baee?w=100'"
+            :alt="item.product.name"
+            class="w-16 h-16 object-cover flex-shrink-0 border border-ink/10"
+          />
+          <div class="flex-1 min-w-0">
+            <h3 class="font-medium text-ink text-sm truncate">{{ item.product.name }}</h3>
+            <p class="text-peony text-sm">NT$ {{ item.product.price.toLocaleString() }}</p>
+          </div>
+
+          <!-- Quantity Controls -->
+          <div class="flex items-center border border-ink/20">
+            <button
+              @click="updateQuantity(item.id, item.quantity - 1)"
+              :disabled="item.quantity <= 1"
+              class="w-8 h-8 flex items-center justify-center hover:bg-ink hover:text-paper text-ink text-sm disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink"
+            >
+              −
+            </button>
+            <span class="w-8 h-8 flex items-center justify-center text-sm border-x border-ink/20">
+              {{ item.quantity }}
+            </span>
+            <button
+              @click="updateQuantity(item.id, item.quantity + 1)"
+              :disabled="item.quantity >= item.product.stock"
+              class="w-8 h-8 flex items-center justify-center hover:bg-ink hover:text-paper text-ink text-sm disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-ink"
+            >
+              +
+            </button>
+          </div>
+
+          <p class="text-ink font-medium text-sm w-24 text-right">
+            NT$ {{ (item.product.price * item.quantity).toLocaleString() }}
+          </p>
+
+          <button
+            @click="confirmDelete(item.id)"
+            class="text-ink/40 hover:text-peony transition-colors ml-2"
+            aria-label="移除"
+          >
+            <span class="material-symbols-outlined" data-icon="delete">delete</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div class="border border-ink/15 p-6 lg:w-80 lg:flex-shrink-0 lg:sticky lg:top-20">
+        <div class="flex justify-between items-center mb-2 text-sm">
+          <span class="text-ink/70">商品小計</span>
+          <span class="text-ink">NT$ {{ total.toLocaleString() }}</span>
+        </div>
+        <div class="flex justify-between items-center mb-4 text-sm">
+          <span class="text-ink/70">運費</span>
+          <span class="text-ink">{{ total >= 500 ? '免運' : 'NT$ 150' }}</span>
+        </div>
+        <div class="border-t border-ink/10 pt-4 flex justify-between items-center">
+          <span class="font-bold text-ink">總計</span>
+          <span class="font-bold text-xl text-peony">
+            NT$ {{ (total + (total >= 500 ? 0 : 150)).toLocaleString() }}
+          </span>
+        </div>
+        <button
+          @click="goCheckout"
+          class="w-full mt-4 bg-peony text-paper py-3 text-sm font-medium hover:bg-peony/90 transition-colors"
+        >
+          前往結帳
         </button>
       </div>
-    </div>
-
-    <!-- Summary -->
-    <div class="border border-ink/15 p-6">
-      <div class="flex justify-between items-center mb-2 text-sm">
-        <span class="text-ink/70">商品小計</span>
-        <span class="text-ink">NT$ {{ total.toLocaleString() }}</span>
-      </div>
-      <div class="flex justify-between items-center mb-4 text-sm">
-        <span class="text-ink/70">運費</span>
-        <span class="text-ink">{{ total >= 500 ? '免運' : 'NT$ 150' }}</span>
-      </div>
-      <div class="border-t border-ink/10 pt-4 flex justify-between items-center">
-        <span class="font-bold text-ink">總計</span>
-        <span class="font-bold text-xl text-peony">
-          NT$ {{ (total + (total >= 500 ? 0 : 150)).toLocaleString() }}
-        </span>
-      </div>
-      <button
-        @click="goCheckout"
-        class="w-full mt-4 bg-peony text-paper py-3 text-sm font-medium hover:bg-peony/90 transition-colors"
-      >
-        前往結帳
-      </button>
     </div>
   </template>
 

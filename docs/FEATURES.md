@@ -151,7 +151,8 @@
 
 建單使用 `db.transaction()`：寫訂單、寫明細快照、扣庫存、清空該使用者購物車。  
 訂單編號：`ORD-YYYYMMDD-` + UUID 前 5 碼大寫。  
-初始 `status: 'pending'`。
+初始 `status: 'pending'`。  
+運費由 `src/utils/shipping.js` 依配送方式／滿額免基本運費／偏遠／急件計算，`total_amount` = 商品小計 + `shipping_fee`。
 
 **金流串接**（詳見 `docs/ARCHITECTURE.md` 「金流／第三方整合」）：`pending` 訂單呼叫 `/ecpay/checkout` 取得綠界 AIO 表單參數並導向付款頁；消費者付款完成後瀏覽器（非 ECPay 伺服器）導回本機訂單頁，前端呼叫 `/ecpay/confirm` 主動查詢 `QueryTradeInfo/V5`、驗證 `CheckMacValue` 與金額後才更新狀態為 `paid`／`failed`。**不依賴** `ReturnURL` Server-to-Server 回呼（本機連不到），該回呼僅有最小 stub（`POST /api/ecpay/notify`）。
 
@@ -168,23 +169,36 @@
 
 ### POST `/api/orders`
 
-**Body（camelCase，皆必填）**
+**Body（camelCase）**
 
-| 欄位 | 規則 |
+| 欄位 | 必填 | 規則 |
+|---|---|---|
+| `recipientName` | 是 | 非空 |
+| `recipientEmail` | 是 | 同上 email regex |
+| `recipientAddress` | 是 | 非空 |
+| `shippingMethod` | 是 | `'home'`（宅配）或 `'convenience'`（超商取貨） |
+| `isRemoteArea` | 否 | 預設 `false`；`true` 時偏遠加收 200 |
+| `isExpress` | 否 | 預設 `false`；`true` 時當日急件加收 250 |
+
+**運費規則**（`src/utils/shipping.js`）
+
+| 條件 | 費用 |
 |---|---|
-| `recipientName` | 非空 |
-| `recipientEmail` | 同上 email regex |
-| `recipientAddress` | 非空 |
+| 宅配基本運費 | 120 |
+| 超商取貨（非基本運費） | 60 |
+| 商品小計 ≥ 1,500 | 免**基本**運費（僅宅配 120；超商 60 仍收） |
+| 偏遠地區 | +200 |
+| 當日急件 | +250 |
 
 **業務步驟**
 
-1. 驗證 body  
+1. 驗證 body（含 `shippingMethod`）  
 2. 讀購物車 JOIN 商品  
 3. 空車 → 400 `CART_EMPTY`  
 4. 任一项 quantity > stock → 400 `STOCK_INSUFFICIENT`（message 列出商品名）  
-5. `totalAmount` = Σ(price × qty)  
-6. Transaction：INSERT order / order_items / 扣 stock / DELETE cart  
-7. `201` 回傳 `{ id, order_no, total_amount, status, items, created_at }`
+5. `subtotal` = Σ(price × qty)；`shipping_fee` = `calculateShippingFee(...)`；`total_amount` = subtotal + shipping_fee  
+6. Transaction：INSERT order（含配送欄位）／order_items／扣 stock／DELETE cart  
+7. `201` 回傳 `{ id, order_no, total_amount, shipping_fee, shipping_method, is_remote_area, is_express, status, items, created_at }`
 
 ### GET `/api/orders`
 
@@ -211,7 +225,7 @@
 
 只有自己的 `pending` 訂單可呼叫；`ECPAY_MERCHANT_ID`／`ECPAY_HASH_KEY`／`ECPAY_HASH_IV` 未設定 → 500 `ECPAY_CONFIG_ERROR`。
 
-**成功 `200`**：`data: { action_url, params }`。`params` 含 `MerchantID`、`MerchantTradeNo`（新產生、寫回訂單）、`MerchantTradeDate`（UTC+8）、`TotalAmount`、`ItemName`（訂單明細組成，截斷 200 字）、`ReturnURL`（指向 `/api/ecpay/notify`）、`ClientBackURL`／`OrderResultURL`（指向本機訂單頁／落地頁）、`ChoosePayment: 'Credit'`、`CheckMacValue`（SHA256）。前端需動態組 `<form method="POST">` 送出（不可用 iframe）。
+**成功 `200`**：`data: { action_url, params }`。`params` 含 `MerchantID`、`MerchantTradeNo`（新產生、寫回訂單）、`MerchantTradeDate`（UTC+8）、`TotalAmount`、`ItemName`（訂單明細組成，截斷 200 字）、`ReturnURL`（指向 `/api/ecpay/notify`）、`ClientBackURL`／`OrderResultURL`（指向本機訂單頁／落地頁）、`ChoosePayment: 'ALL'`（可選信用卡／網路 ATM 等）、`CheckMacValue`（SHA256）。前端需動態組 `<form method="POST">` 送出（不可用 iframe）。
 
 ### POST `/api/orders/:id/ecpay/confirm`
 
@@ -331,6 +345,7 @@ JWT + admin。可看全部使用者訂單。詳情額外帶下單者 `{ name, em
 | ECPay 主動查詢確認付款 | ✅ `POST /api/orders/:id/ecpay/confirm`（`QueryTradeInfo/V5`） |
 | ECPay callback（`ReturnURL`） | ⚠️ 最小 stub `POST /api/ecpay/notify`，本機無法被觸達，非主流程 |
 | 環境變數 `ECPAY_*`、`BASE_URL` | 已使用（`ECPAY_ENV=production` 才走正式環境，其餘一律走 stage） |
+| Playwright E2E（真實 staging 刷卡） | ✅ `e2e/ecpay-checkout.spec.js`（`npm run test:e2e:ecpay`） |
 
 **架構限制**：本機無法接收綠界 Server-to-Server 回呼，因此付款結果**一律由本地端主動查詢**確認，不依賴 `ReturnURL`／webhook。完整設計見 `docs/ARCHITECTURE.md` 「金流／第三方整合」與 `docs/plans/archive/2026-09-22-ecpay-integration.md`。
 

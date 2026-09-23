@@ -1,4 +1,4 @@
-const { app, request, registerUser } = require('./setup');
+const { app, request, registerUser, resetDatabase } = require('./setup');
 
 describe('Orders API', () => {
   let userToken;
@@ -6,13 +6,18 @@ describe('Orders API', () => {
   let orderId;
 
   beforeAll(async () => {
+    resetDatabase();
     // Register a user for order tests
     const { token } = await registerUser();
     userToken = token;
 
-    // Get a product id
-    const prodRes = await request(app).get('/api/products');
-    productId = prodRes.body.data.products[0].id;
+    // Get a product with remaining stock
+    const prodRes = await request(app).get('/api/products?limit=100');
+    const product = prodRes.body.data.products.find((p) => p.stock > 0);
+    if (!product) {
+      throw new Error('沒有可用庫存的商品，無法執行訂單測試');
+    }
+    productId = product.id;
 
     // Add product to cart
     await request(app)
@@ -29,6 +34,7 @@ describe('Orders API', () => {
         recipientName: '測試收件人',
         recipientEmail: 'recipient@example.com',
         recipientAddress: '台北市測試路 123 號',
+        shippingMethod: 'home',
       });
 
     expect(res.status).toBe(201);
@@ -38,9 +44,17 @@ describe('Orders API', () => {
     expect(res.body.data).toHaveProperty('id');
     expect(res.body.data).toHaveProperty('order_no');
     expect(res.body.data).toHaveProperty('total_amount');
+    expect(res.body.data).toHaveProperty('shipping_fee');
+    expect(res.body.data).toHaveProperty('shipping_method', 'home');
+    expect(res.body.data).toHaveProperty('is_remote_area', false);
+    expect(res.body.data).toHaveProperty('is_express', false);
     expect(res.body.data).toHaveProperty('status', 'pending');
     expect(res.body.data).toHaveProperty('items');
     expect(Array.isArray(res.body.data.items)).toBe(true);
+    expect(res.body.data.total_amount).toBe(
+      res.body.data.items.reduce((sum, item) => sum + item.product_price * item.quantity, 0) +
+        res.body.data.shipping_fee
+    );
 
     orderId = res.body.data.id;
   });
@@ -54,6 +68,7 @@ describe('Orders API', () => {
         recipientName: '測試收件人',
         recipientEmail: 'recipient@example.com',
         recipientAddress: '台北市測試路 123 號',
+        shippingMethod: 'home',
       });
 
     expect(res.status).toBe(400);
@@ -68,6 +83,7 @@ describe('Orders API', () => {
         recipientName: '測試收件人',
         recipientEmail: 'recipient@example.com',
         recipientAddress: '台北市測試路 123 號',
+        shippingMethod: 'home',
       });
 
     expect(res.status).toBe(401);

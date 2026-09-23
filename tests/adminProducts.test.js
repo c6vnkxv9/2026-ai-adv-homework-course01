@@ -1,10 +1,11 @@
-const { app, request, getAdminToken, registerUser } = require('./setup');
+const { app, request, getAdminToken, registerUser, resetDatabase } = require('./setup');
 
 describe('Admin Products API', () => {
   let adminToken;
   let createdProductId;
 
   beforeAll(async () => {
+    resetDatabase();
     adminToken = await getAdminToken();
   });
 

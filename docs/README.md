@@ -48,8 +48,12 @@ npm run dev:server   # 終端機 2：node server.js
 | `npm run dev:server` | 只啟動 server |
 | `npm run dev:css` | Tailwind watch |
 | `npm run css:build` | 單次建置 CSS |
-| `npm test` | Vitest 單次跑完全部測試（依序、真實 DB） |
+| `npm test` | `test:unit` + `test:integration` |
+| `npm run test:unit` | 純函式 unit（運費等） |
+| `npm run test:integration` | 獨立 `database.test.sqlite` 的 API 整合測試 |
+| `npm run test:e2e` | Playwright（需本機 server 已啟動；綠界網路 ATM） |
 | `npm run openapi` | 從路由 `@openapi` 產生 `openapi.json` |
+| `npm run postman` | 產生 `openapi.json` + `postman/collection.json` |
 
 ---
 

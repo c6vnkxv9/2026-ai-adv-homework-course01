@@ -1,8 +1,12 @@
-const { app, request, registerUser } = require('./setup');
+const { app, request, registerUser, resetDatabase } = require('./setup');
 
 describe('Auth API', () => {
   let registeredEmail;
   let userToken;
+
+  beforeAll(() => {
+    resetDatabase();
+  });
 
   it('should register a new user successfully', async () => {
     registeredEmail = `auth-test-${Date.now()}@example.com`;

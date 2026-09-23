@@ -1,7 +1,11 @@
-const { app, request } = require('./setup');
+const { app, request, resetDatabase } = require('./setup');
 
 describe('Products API', () => {
   let productId;
+
+  beforeAll(() => {
+    resetDatabase();
+  });
 
   it('should get product list', async () => {
     const res = await request(app).get('/api/products');

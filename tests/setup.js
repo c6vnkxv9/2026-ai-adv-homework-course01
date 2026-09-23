@@ -1,5 +1,6 @@
 const request = require('supertest');
 const app = require('../app');
+const db = require('../src/database');
 
 /**
  * Login with the seed admin account and return the JWT token.
@@ -26,4 +27,9 @@ async function registerUser(overrides = {}) {
   return { token: res.body.data.token, user: res.body.data.user };
 }
 
-module.exports = { app, request, getAdminToken, registerUser };
+/** 清空測試 DB 並重新 seed（僅 NODE_ENV=test）。 */
+function resetDatabase() {
+  db.resetDatabaseForTests();
+}
+
+module.exports = { app, request, getAdminToken, registerUser, resetDatabase, db };

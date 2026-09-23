@@ -8,6 +8,7 @@ createApp({
     const notFound = ref(false);
     const quantity = ref(1);
     const adding = ref(false);
+    const related = ref([]);
 
     function decrease() {
       if (quantity.value > 1) quantity.value--;
@@ -39,6 +40,19 @@ createApp({
       }
     }
 
+    async function loadRelated() {
+      try {
+        const res = await apiFetch('/api/products?limit=5');
+        related.value = res.data.products.filter(function (p) { return p.id !== productId; }).slice(0, 3);
+      } catch (e) {
+        related.value = [];
+      }
+    }
+
+    function goToProduct(id) {
+      window.location.href = '/products/' + id;
+    }
+
     onMounted(async function () {
       try {
         const res = await apiFetch('/api/products/' + productId);
@@ -48,8 +62,9 @@ createApp({
       } finally {
         loading.value = false;
       }
+      loadRelated();
     });
 
-    return { product, loading, notFound, quantity, adding, decrease, increase, addToCart };
+    return { product, loading, notFound, quantity, adding, related, decrease, increase, addToCart, goToProduct };
   }
 }).mount('#app');

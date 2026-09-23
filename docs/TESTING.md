@@ -2,30 +2,30 @@
 
 ## 工具與整體方式
 
-- **Vitest** + **Supertest**，對 `require('../app')` 匯出的 Express `app` 發請求（不 `listen`、不佔 port）。  
-- 打**真實** `database.sqlite`：無 mock DB／bcrypt／JWT——屬 integration test。  
-- 執行：`npm test`（= `vitest run`）。目前無 `test:watch`、無 coverage script。  
-- `vitest.config.js`：`globals: true`（不必 import `describe`/`it`/`expect`）、`hookTimeout: 10000`。
+| 指令 | 說明 |
+|---|---|
+| `npm run test:unit` | 純函式 unit（目前 `tests/shipping.test.js`），**不**開 DB |
+| `npm run test:integration` | Vitest + Supertest；使用獨立 `database.test.sqlite`（`DATABASE_PATH`），**不修改** `database.sqlite` |
+| `npm test` | `test:unit` + `test:integration` |
+| `npm run test:e2e` | Playwright WebATM 流程；需本機已啟動 `http://localhost:3001`（**不**由此指令啟動 server） |
+| `npm run test:e2e:credit` | 可選：既有信用卡 E2E |
+| `npm run postman` | 產生最新 `openapi.json` + `postman/collection.json` |
+
+整合測試透過 `tests/vitest.env.js` 在載入 app 前設定 `NODE_ENV=test` 與 `DATABASE_PATH=./database.test.sqlite`，並以 `db.resetDatabaseForTests()` 清空／重建 seed。
 
 ---
-
 ## 執行順序與依賴關係
 
-`fileParallelism: false` + 固定 `sequence.files`：
+整合測試（`vitest.integration.config.js`）`fileParallelism: false` + 固定 `sequence.files`，並在各檔 `beforeAll`／`beforeEach` 呼叫 `resetDatabase()`：
 
-| 順序 | 檔案 | 涵蓋 | 依賴／前置假設 |
-|---|---|---|---|
-| 1 | `tests/auth.test.js` | 註冊、登入、profile | 可寫入 users；自建唯一 email |
-| 2 | `tests/products.test.js` | 公開商品列表／詳情／分頁 | 依賴 seed 或既有 products 非空 |
-| 3 | `tests/cart.test.js` | 訪客＋登入購物車 | 需至少一個真實 product id（從 GET /api/products 取） |
-| 4 | `tests/orders.test.js` | 建單、列表、詳情、空車失敗 | 需 registerUser + 先加購；會扣庫存、清車 |
-| 5 | `tests/ecpayPayment.test.js` | 綠界 AIO checkout/confirm、CheckMacValue 驗證、notify stub | 需 registerUser + 先加購建單；mock `global.fetch` 避免打外網 |
-| 6 | `tests/adminProducts.test.js` | 後台商品 CRUD、403 | `getAdminToken()`（seed admin） |
-| 7 | `tests/adminOrders.test.js` | 後台訂單列表／篩選／詳情 | admin token；`beforeAll` 內會建一筆訂單 |
+| 順序 | 檔案 | 涵蓋 |
+|---|---|---|
+| 1 | `tests/integration/orderFlow.test.js` | 完整建單＋運費＋失敗不留髒資料 |
+| 2–8 | `tests/auth`…`adminOrders` | 既有 API 整合測試（改打測試 DB） |
 
-**為何不能平行／亂序**：共用同一 DB、無 reset／transaction rollback。後跑的測試會看到前面留下的 users、orders、被扣過的 stock。順序錯可能導致「預期有商品／庫存」失敗。
+Unit：`vitest.unit.config.js` 僅 `tests/shipping.test.js`。
 
-**新增測試檔**：必須插入 `vitest.config.js` 的 `sequence.files` 合理位置（通常：被依賴的資源測試在前，admin／破壞性操作在後）。
+**新增整合測試檔**：加入 `vitest.integration.config.js` 的 `include`／`sequence.files`。
 
 ---
 
@@ -33,21 +33,35 @@
 
 | 檔案 | 內容摘要 |
 |---|---|
-| `tests/setup.js` | 共用 helper（見下） |
+| `tests/setup.js` | 共用 helper（含 `resetDatabase`） |
+| `tests/vitest.env.js` | 整合測試環境：獨立 `database.test.sqlite` |
+| `tests/shipping.test.js` | 運費純函式 unit |
+| `tests/integration/orderFlow.test.js` | 登入→加購→建單→DB／庫存／運費／失敗回滾 |
 | `tests/auth.test.js` | 註冊成功、重複 email 409、登入成功／錯密碼 401、profile 有無 token |
 | `tests/products.test.js` | 列表 envelope、分頁 query、詳情、不存在 404 |
 | `tests/cart.test.js` | 訪客 Session-Id CRUD；登入模式加入；不存在商品 404 |
-| `tests/orders.test.js` | 從車建單、空車、未授權、列表／詳情、亂 id 404 |
+| `tests/orders.test.js` | 從車建單（含運費欄位）、空車、未授權、列表／詳情、亂 id 404 |
 | `tests/ecpayPayment.test.js` | AIO checkout 參數、confirm 依 `TradeStatus` 更新／idempotent、`CheckMacValue`／金額不符時拒絕、notify stub 永遠回 `1\|OK` |
 | `tests/adminProducts.test.js` | 列表／新增／改／刪、一般 user 403、無 token 401 |
 | `tests/adminOrders.test.js` | 列表、status 篩選、詳情含 items、非 admin 403 |
+
+### Playwright E2E（`e2e/`）
+
+| 檔案 | 內容摘要 | 前置 |
+|---|---|---|
+| `e2e/ecpay-webatm.spec.js` | admin 登入 → 加購 → 結帳 → 綠界網路 ATM → 土地銀行 Save → 返回商店 → `paid`＋截圖 | server 已在 3001；`ChoosePayment=ALL`；帳密 `.env` `ADMIN_*` |
+| `e2e/ecpay-checkout.spec.js` | admin 登入 → 信用卡測試卡流程（可選） | `npm run test:e2e:credit`；同上帳密 |
+
+登入帳密由 `e2e/helpers/credentials.js` 讀 `ADMIN_EMAIL`／`ADMIN_PASSWORD`（playwright config 會 `dotenv`）。若改過 `.env` 且 DB 已用舊帳 seed，需重建 DB 或改回與 seed 一致。
+
+執行：`npm run test:e2e`（**不會**自動啟動 server）。首次需 `npx playwright install chromium`。
 
 ---
 
 ## 輔助函式（`tests/setup.js`）
 
 ```js
-module.exports = { app, request, getAdminToken, registerUser };
+module.exports = { app, request, getAdminToken, registerUser, resetDatabase, db };
 ```
 
 ### `getAdminToken()`

@@ -1,4 +1,4 @@
-const { app, request, registerUser } = require('./setup');
+const { app, request, registerUser, resetDatabase } = require('./setup');
 
 describe('Cart API', () => {
   const sessionId = 'test-session-' + Date.now();
@@ -7,9 +7,11 @@ describe('Cart API', () => {
   let userToken;
 
   beforeAll(async () => {
+    resetDatabase();
     // Get a product id from the product list
-    const res = await request(app).get('/api/products');
-    productId = res.body.data.products[0].id;
+    const res = await request(app).get('/api/products?limit=100');
+    const product = res.body.data.products.find((p) => p.stock > 0);
+    productId = product.id;
   });
 
   it('should add product to cart (guest mode)', async () => {

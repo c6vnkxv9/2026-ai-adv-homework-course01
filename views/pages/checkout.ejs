@@ -7,7 +7,7 @@
 
   <div v-else class="flex flex-col lg:flex-row gap-8">
     <!-- Left: Form -->
-    <div class="lg:w-3/5">
+    <div class="lg:w-3/5 space-y-6">
       <div class="border border-ink/15 p-6">
         <h2 class="font-medium text-ink mb-4">收件資訊</h2>
         <div class="space-y-4">
@@ -46,6 +46,35 @@
           </div>
         </div>
       </div>
+
+      <div class="border border-ink/15 p-6">
+        <h2 class="font-medium text-ink mb-4">配送選項</h2>
+        <div class="space-y-4">
+          <div>
+            <span class="block text-sm text-ink/70 mb-2">配送方式</span>
+            <div class="flex flex-col sm:flex-row gap-3">
+              <label class="flex items-center gap-2 text-sm cursor-pointer">
+                <input v-model="form.shippingMethod" type="radio" value="home" class="accent-peony" />
+                宅配（基本運費 NT$ 120）
+              </label>
+              <label class="flex items-center gap-2 text-sm cursor-pointer">
+                <input v-model="form.shippingMethod" type="radio" value="convenience" class="accent-peony" />
+                超商取貨（NT$ 60）
+              </label>
+            </div>
+            <p v-if="errors.shippingMethod" class="text-peony text-xs mt-1">{{ errors.shippingMethod }}</p>
+          </div>
+          <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input v-model="form.isRemoteArea" type="checkbox" class="accent-peony" />
+            偏遠地區（加收 NT$ 200）
+          </label>
+          <label class="flex items-center gap-2 text-sm cursor-pointer">
+            <input v-model="form.isExpress" type="checkbox" class="accent-peony" />
+            當日急件（加收 NT$ 250）
+          </label>
+          <p class="text-xs text-ink/50">商品小計滿 NT$ {{ FREE_SHIPPING_THRESHOLD.toLocaleString() }} 免宅配基本運費；超商取貨費用不適用免運。</p>
+        </div>
+      </div>
     </div>
 
     <!-- Right: Summary -->
@@ -65,13 +94,13 @@
           </div>
           <div class="flex justify-between">
             <span class="text-ink/70">運費</span>
-            <span>{{ cartTotal >= 500 ? '免運' : 'NT$ 150' }}</span>
+            <span>{{ shippingFee === 0 ? '免運' : 'NT$ ' + shippingFee.toLocaleString() }}</span>
           </div>
         </div>
         <div class="border-t border-ink/10 pt-3 mt-3 flex justify-between items-center">
           <span class="font-bold text-ink">總計</span>
           <span class="font-bold text-xl text-peony">
-            NT$ {{ (cartTotal + (cartTotal >= 500 ? 0 : 150)).toLocaleString() }}
+            NT$ {{ orderTotal.toLocaleString() }}
           </span>
         </div>
         <button

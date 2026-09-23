@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "@playwright/mcp@latest"
+      ]
+    },
+    "openapi": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@ivotoby/openapi-mcp-server",
+        "--api-base-url",
+        "http://localhost:3001",
+        "--openapi-spec",
+        "/Users/kamiliu/Desktop/2026-ai-adv-homework-course01/openapi.json"
+      ]
+    }
+  }
+}

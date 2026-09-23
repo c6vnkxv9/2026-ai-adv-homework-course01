@@ -65,7 +65,8 @@ app.js（組裝，不 listen）
 │   │   ├── sessionMiddleware.js# 讀 X-Session-Id → req.sessionId（全域）
 │   │   └── errorHandler.js     # 全域錯誤 → envelope；500 不洩漏細節
 │   ├── utils/
-│   │   └── ecpay.js            # 綠界 CheckMacValue／URL encode／MerchantTradeNo 等小工具函式
+│   │   ├── ecpay.js            # 綠界 CheckMacValue／URL encode／MerchantTradeNo 等小工具函式
+│   │   └── shipping.js         # 運費計算（宅配／超商／滿額免基本運費／偏遠／急件）
 │   └── routes/
 │       ├── authRoutes.js       # /api/auth
 │       ├── productRoutes.js    # /api/products（公開）
@@ -102,6 +103,7 @@ app.js（組裝，不 listen）
 │
 ├── tests/
 │   ├── setup.js                # getAdminToken、registerUser、re-export app/request
+│   ├── shipping.test.js        # 運費純函式 unit test（不打 API／DB）
 │   ├── auth.test.js
 │   ├── products.test.js
 │   ├── cart.test.js
@@ -279,14 +281,18 @@ PRAGMA：`journal_mode = WAL`、`foreign_keys = ON`。
 | `recipient_name` | TEXT | NOT NULL |
 | `recipient_email` | TEXT | NOT NULL |
 | `recipient_address` | TEXT | NOT NULL |
-| `total_amount` | INTEGER | NOT NULL |
+| `total_amount` | INTEGER | NOT NULL（商品小計 + `shipping_fee`） |
+| `shipping_method` | TEXT | NOT NULL；`'home'` \| `'convenience'`（預設 `'home'`） |
+| `shipping_fee` | INTEGER | NOT NULL；由 `src/utils/shipping.js` 計算 |
+| `is_remote_area` | INTEGER | NOT NULL DEFAULT 0（SQLite boolean 0/1） |
+| `is_express` | INTEGER | NOT NULL DEFAULT 0（當日急件） |
 | `status` | TEXT | NOT NULL DEFAULT `'pending'`；`CHECK(status IN ('pending','paid','failed'))` |
 | `ecpay_merchant_trade_no` | TEXT | 可 NULL；本系統產生、送給綠界的 `MerchantTradeNo`（每次 `/ecpay/checkout` 重新產生） |
 | `ecpay_trade_no` | TEXT | 可 NULL；綠界回傳的 `TradeNo`，`/ecpay/confirm` 或 `/ecpay/notify` 驗證成功後寫入 |
 | `payment_method` | TEXT | 可 NULL；綠界回傳的 `PaymentType`（如 `Credit_CreditCard`） |
 | `created_at` | TEXT | NOT NULL DEFAULT `datetime('now')` |
 
-> 三個 ECPay 欄位由 `src/database.js` 的 `migrateOrdersTable()` 以 `ALTER TABLE ... ADD COLUMN`（idempotent，先查 `PRAGMA table_info` 再補）相容既有 DB，不會清資料——這是本專案目前唯一的手動 migration 範例。
+> ECPay 與運費欄位由 `src/database.js` 的 `migrateOrdersTable()` 以 `ALTER TABLE ... ADD COLUMN`（idempotent，先查 `PRAGMA table_info` 再補）相容既有 DB，不會清資料。
 
 ### `order_items`
 
@@ -308,17 +314,18 @@ PRAGMA：`journal_mode = WAL`、`foreign_keys = ON`。
 
 ## 資料流範例：建立訂單
 
-1. 前端 `checkout.js` → `apiFetch('POST /api/orders', { recipientName, recipientEmail, recipientAddress })`，自動帶 Bearer。  
+1. 前端 `checkout.js` → `apiFetch('POST /api/orders', { recipientName, recipientEmail, recipientAddress, shippingMethod, isRemoteArea, isExpress })`，自動帶 Bearer。  
 2. `orderRoutes`：`authMiddleware` → handler。  
-3. 驗證收件欄位與 email 格式。  
+3. 驗證收件欄位、email 格式、`shippingMethod`（`home`｜`convenience`）。  
 4. 查 `cart_items` WHERE `user_id`（**只用登入購物車，不合併訪客車**）。空車 → `CART_EMPTY`。  
 5. 逐項比對 `quantity` 與 `products.stock`；不足 → `STOCK_INSUFFICIENT`。  
-6. `db.transaction()` 原子執行：  
-   - INSERT `orders`（status=`pending`）  
+6. `subtotal` = Σ(price × qty)；呼叫 `calculateShippingFee` 得 `shipping_fee`；`total_amount` = subtotal + shipping_fee。  
+7. `db.transaction()` 原子執行：  
+   - INSERT `orders`（status=`pending`，含配送欄位）  
    - INSERT 各 `order_items`（名稱／價格快照）  
    - `UPDATE products SET stock = stock - ?`  
    - `DELETE FROM cart_items WHERE user_id = ?`  
-7. 回傳 `201` + 訂單摘要。
+8. 回傳 `201` + 訂單摘要（含 `shipping_fee`／`total_amount`）。
 
 ---
 
@@ -366,7 +373,7 @@ pending
 - `src/utils/ecpay.js`：`ecpayUrlEncode`（SHA256 CheckMacValue 專用，urlencode → 轉小寫 → .NET 字元還原）、`generateCheckMacValue`／`verifyCheckMacValue`（timing-safe）、`formatMerchantTradeDate`（UTC+8）、`generateMerchantTradeNo`（英數字、≤20 字元，每次 checkout 重新產生）、`getEcpayBaseUrl`（依 `ECPAY_ENV` 切換 stage／production，非 `'production'` 一律視為 stage）。
 - 查詢 API 回應為 URL-encoded 字串（非 JSON），以 `new URLSearchParams(text)` 解析。
 - 測試（`tests/ecpayPayment.test.js`）以覆寫 `global.fetch` 模擬綠界查詢回應，避免依賴外網；回應的 `CheckMacValue` 用同一套 `generateCheckMacValue` 現算，確保測試資料與正式邏輯一致。
-- `ChoosePayment` 固定 `'Credit'`（僅信用卡一次付清），未支援 ATM／CVS／分期等其他付款方式。
+- `ChoosePayment` 固定 `'ALL'`（綠界付款頁可選信用卡、網路 ATM 等）。
 - 環境變數：沿用既有 `ECPAY_MERCHANT_ID`／`ECPAY_HASH_KEY`／`ECPAY_HASH_IV`／`ECPAY_ENV`，並開始使用原本預留但未用的 `BASE_URL`（組 `ReturnURL`／`ClientBackURL`／`OrderResultURL`，預設 `http://localhost:3001`）。
 - 舊的 `PATCH /api/orders/:id/pay`（模擬付款）保留不動，供既有測試與 API 用途；前台 UI 已改用上述真實流程。
 
