@@ -140,11 +140,20 @@ async function selectPaymentMethod(page, nameRe) {
 
 async function selectBank(page, nameRe) {
   await dismissDialogs(page);
+
+  // 綠界 WebATM 現行 UI：銀行改為 <select>／combobox
+  const select = page.locator('select').filter({ has: page.locator('option', { hasText: nameRe }) }).first();
+  if (await select.isVisible().catch(() => false)) {
+    const optionText = await select.locator('option').filter({ hasText: nameRe }).first().textContent();
+    await select.selectOption({ label: optionText.trim() });
+    await page.waitForTimeout(500);
+    return;
+  }
+
   const candidates = [
     page.getByRole('link', { name: nameRe }),
     page.getByRole('button', { name: nameRe }),
-    page.getByText(nameRe),
-    page.locator('a, button, label, li, div, img[alt]').filter({ hasText: nameRe }),
+    page.locator('a, button, label, li').filter({ hasText: nameRe }),
   ];
   for (const loc of candidates) {
     const el = loc.first();

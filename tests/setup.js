@@ -24,6 +24,9 @@ async function registerUser(overrides = {}) {
       password: overrides.password || 'password123',
       name: overrides.name || '測試使用者',
     });
+  if (res.status !== 201 || !res.body?.data?.token) {
+    throw new Error(`註冊失敗：${res.status} ${JSON.stringify(res.body)}`);
+  }
   return { token: res.body.data.token, user: res.body.data.user };
 }
 
